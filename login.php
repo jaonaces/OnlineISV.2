@@ -132,7 +132,7 @@ $csrf_token = generateCSRFToken();
             border-radius: 20px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             overflow: hidden;
-            max-width: 1000px;
+            max-width: 800px;
             width: 90%;
             margin: 20px;
         }
