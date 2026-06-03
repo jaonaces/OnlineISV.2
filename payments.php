@@ -63,7 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $db->update('invoices', ['status' => $new_status], 'invoice_id = ?', [$invoice_id]);
                 
-                logAudit('Created', 'Payment', $payment_id, "Created payment: $payment_code");
                 setFlashMessage('success', 'Payment recorded successfully.');
             }
         } elseif ($action === 'delete') {
@@ -89,7 +88,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $db->update('invoices', ['status' => $new_status], 'invoice_id = ?', [$invoice_id]);
             
-            logAudit('Deleted', 'Payment', $payment_id, "Deleted payment: " . $payment['payment_code']);
             setFlashMessage('success', 'Payment deleted successfully.');
         }
         
@@ -101,15 +99,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $whereClause = '';
 $params = [];
 
+// Get filter type from URL parameter
+$filter_type = $_GET['filter'] ?? 'all';
+
 if ($role !== 'Super Admin') {
     $whereClause = 'WHERE p.branch_id = ?';
     $params[] = $branchId;
 }
 
+// Add event type filter
+if ($filter_type === 'rent') {
+    $whereClause .= ($whereClause ? ' AND' : 'WHERE') . " b.event_type = 'Rental'";
+} elseif ($filter_type === 'event') {
+    $whereClause .= ($whereClause ? ' AND' : 'WHERE') . " b.event_type != 'Rental'";
+}
+
 // Get payments
 $payments = $db->fetchAll(
     "SELECT p.*, i.invoice_number, b.booking_number, c.full_name as client_name, br.branch_name,
-            u.full_name as received_by_name
+            u.full_name as received_by_name, b.event_type
      FROM payments p
      JOIN invoices i ON p.invoice_id = i.invoice_id
      JOIN bookings b ON p.booking_id = b.booking_id
@@ -117,7 +125,7 @@ $payments = $db->fetchAll(
      LEFT JOIN branches br ON p.branch_id = br.branch_id
      LEFT JOIN users u ON p.received_by = u.user_id
      $whereClause
-     ORDER BY p.payment_date DESC, p.payment_id DESC",
+     ORDER BY p.created_at DESC",
     $params
 );
 
@@ -140,9 +148,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Payment Management</h1>
-            <p>Record and track payments</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Payment Management</h1>
+                <p>Record and track payments</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
             <i class="bi bi-plus-lg me-2"></i>Record Payment
@@ -159,6 +172,17 @@ require_once 'includes/header.php';
 
     <div class="card">
         <div class="card-body">
+            <div class="d-flex gap-2 mb-3">
+                <a href="payments.php?filter=all" class="btn <?php echo $filter_type === 'all' ? 'btn-primary' : 'btn-outline-primary'; ?>">
+                    All Payments
+                </a>
+                <a href="payments.php?filter=rent" class="btn <?php echo $filter_type === 'rent' ? 'btn-primary' : 'btn-outline-primary'; ?>">
+                    Rent Payment
+                </a>
+                <a href="payments.php?filter=event" class="btn <?php echo $filter_type === 'event' ? 'btn-primary' : 'btn-outline-primary'; ?>">
+                    Event Payment
+                </a>
+            </div>
             <div class="table-responsive">
                 <table class="table table-hover datatable">
                     <thead>
@@ -166,6 +190,8 @@ require_once 'includes/header.php';
                             <th>Payment Code</th>
                             <th>Invoice #</th>
                             <th>Client</th>
+                            <th>Event Type</th>
+                            <th>Branch</th>
                             <th>Payment Date</th>
                             <th>Method</th>
                             <th>Amount</th>
@@ -180,6 +206,12 @@ require_once 'includes/header.php';
                             <td><strong><?php echo $payment['payment_code']; ?></strong></td>
                             <td><?php echo $payment['invoice_number']; ?></td>
                             <td><?php echo $payment['client_name']; ?></td>
+                            <td>
+                                <span class="badge badge-<?php echo $payment['event_type'] === 'Rental' ? 'info' : 'primary'; ?>">
+                                    <?php echo $payment['event_type']; ?>
+                                </span>
+                            </td>
+                            <td><?php echo $payment['branch_name'] ?? 'N/A'; ?></td>
                             <td><?php echo formatDate($payment['payment_date']); ?></td>
                             <td><?php echo $payment['payment_method']; ?></td>
                             <td><?php echo formatCurrency($payment['amount']); ?></td>
@@ -309,5 +341,10 @@ function deletePayment(paymentId, paymentCode) {
     document.getElementById('deletePaymentId').value = paymentId;
     document.getElementById('deletePaymentCode').textContent = paymentCode;
     new bootstrap.Modal(document.getElementById('deletePaymentModal')).show();
+}
+
+function setPaymentType(type) {
+    // This function can be used to pre-select payment type in the modal
+    console.log('Payment type selected: ' + type);
 }
 </script>

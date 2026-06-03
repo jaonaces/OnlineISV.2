@@ -76,7 +76,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $branch = $db->fetchOne("SELECT branch_name FROM branches WHERE branch_id = ?", [$branch_id]);
                 $db->delete('branches', 'branch_id = ?', [$branch_id]);
-                logAudit('Deleted', 'Branch', $branch_id, "Deleted branch: " . $branch['branch_name']);
                 setFlashMessage('success', 'Branch deleted successfully.');
             }
         }
@@ -94,9 +93,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Branch Management</h1>
-            <p>Manage all branches</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Branch Management</h1>
+                <p>Manage all branches</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBranchModal">
             <i class="bi bi-plus-lg me-2"></i>Add Branch

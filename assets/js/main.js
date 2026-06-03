@@ -23,7 +23,32 @@ $(document).ready(function() {
     // Sidebar toggle for mobile
     $('#sidebarToggle').on('click', function() {
         $('.sidebar').toggleClass('show');
+        $('#sidebarOverlay').toggleClass('show');
+        $('body').toggleClass('sidebar-open');
     });
+    
+    // Close sidebar when clicking overlay
+    $('#sidebarOverlay').on('click', function() {
+        $('.sidebar').removeClass('show');
+        $('#sidebarOverlay').removeClass('show');
+        $('body').removeClass('sidebar-open');
+    });
+    
+    // Close sidebar when clicking close button
+    $('#sidebarClose').on('click', function() {
+        $('.sidebar').removeClass('show');
+        $('#sidebarOverlay').removeClass('show');
+        $('body').removeClass('sidebar-open');
+    });
+    
+    // Close sidebar when clicking a menu link on mobile
+    if (window.innerWidth <= 992) {
+        $('.sidebar .components li a').on('click', function() {
+            $('.sidebar').removeClass('show');
+            $('#sidebarOverlay').removeClass('show');
+            $('body').removeClass('sidebar-open');
+        });
+    }
     
     // Confirm delete actions
     $('.btn-delete').on('click', function(e) {

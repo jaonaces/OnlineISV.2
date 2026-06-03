@@ -42,7 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => 'Active'
             ]);
             
-            logAudit('Created', 'Client', $client_id, "Created client: $full_name");
             setFlashMessage('success', 'Client added successfully.');
         } elseif ($action === 'edit') {
             $client_id = intval($_POST['client_id']);
@@ -62,7 +61,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => $status
             ], 'client_id = ?', [$client_id]);
             
-            logAudit('Updated', 'Client', $client_id, "Updated client: $full_name");
             setFlashMessage('success', 'Client updated successfully.');
         } elseif ($action === 'delete') {
             $client_id = intval($_POST['client_id']);
@@ -74,7 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $client = $db->fetchOne("SELECT full_name FROM clients WHERE client_id = ?", [$client_id]);
                 $db->delete('clients', 'client_id = ?', [$client_id]);
-                logAudit('Deleted', 'Client', $client_id, "Deleted client: " . $client['full_name']);
                 setFlashMessage('success', 'Client deleted successfully.');
             }
         }
@@ -105,9 +102,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Client Management</h1>
-            <p>Manage client information</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Client Management</h1>
+                <p>Manage client information</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addClientModal">
             <i class="bi bi-plus-lg me-2"></i>Add Client

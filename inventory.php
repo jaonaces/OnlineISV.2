@@ -32,9 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $available_quantity = $total_quantity;
             $rental_price = floatval($_POST['rental_price']);
             $condition_status = 'Available';
-            $purchase_date = $_POST['purchase_date'] ?: null;
-            $purchase_price = floatval($_POST['purchase_price']) ?: null;
-            $supplier = sanitize($_POST['supplier']);
             
             // Check if item code exists
             $existing = $db->fetchOne("SELECT inventory_id FROM inventory WHERE item_code = ?", [$item_code]);
@@ -51,9 +48,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'available_quantity' => $available_quantity,
                     'rental_price' => $rental_price,
                     'condition_status' => $condition_status,
-                    'purchase_date' => $purchase_date,
-                    'purchase_price' => $purchase_price,
-                    'supplier' => $supplier,
                     'status' => 'Active'
                 ]);
                 
@@ -70,8 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'performed_by' => getCurrentUserId(),
                     'branch_id' => $inventory_branch_id
                 ]);
-                
-                logAudit('Created', 'Inventory', $inventory_id, "Created inventory item: $item_name");
+
                 setFlashMessage('success', 'Inventory item added successfully.');
             }
         } elseif ($action === 'edit') {
@@ -82,9 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $total_quantity = intval($_POST['total_quantity']);
             $rental_price = floatval($_POST['rental_price']);
             $condition_status = $_POST['condition_status'];
-            $purchase_date = $_POST['purchase_date'] ?: null;
-            $purchase_price = floatval($_POST['purchase_price']) ?: null;
-            $supplier = sanitize($_POST['supplier']);
             $status = $_POST['status'];
             
             $db->update('inventory', [
@@ -94,13 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'total_quantity' => $total_quantity,
                 'rental_price' => $rental_price,
                 'condition_status' => $condition_status,
-                'purchase_date' => $purchase_date,
-                'purchase_price' => $purchase_price,
-                'supplier' => $supplier,
                 'status' => $status
             ], 'inventory_id = ?', [$inventory_id]);
-            
-            logAudit('Updated', 'Inventory', $inventory_id, "Updated inventory item: $item_name");
+
             setFlashMessage('success', 'Inventory item updated successfully.');
         } elseif ($action === 'adjust') {
             $inventory_id = intval($_POST['inventory_id']);
@@ -131,8 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'performed_by' => getCurrentUserId(),
                     'branch_id' => $inventory['branch_id']
                 ]);
-                
-                logAudit('Adjusted', 'Inventory', $inventory_id, "Adjusted inventory: " . $inventory['item_name']);
+
                 setFlashMessage('success', 'Inventory adjusted successfully.');
             }
         } elseif ($action === 'delete') {
@@ -145,7 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $inventory = $db->fetchOne("SELECT item_name FROM inventory WHERE inventory_id = ?", [$inventory_id]);
                 $db->delete('inventory', 'inventory_id = ?', [$inventory_id]);
-                logAudit('Deleted', 'Inventory', $inventory_id, "Deleted inventory: " . $inventory['item_name']);
                 setFlashMessage('success', 'Inventory item deleted successfully.');
             }
         }
@@ -185,9 +169,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Inventory Management</h1>
-            <p>Manage event equipment and supplies</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Inventory Management</h1>
+                <p>Manage event equipment and supplies</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addInventoryModal">
             <i class="bi bi-plus-lg me-2"></i>Add Item
@@ -212,7 +201,6 @@ require_once 'includes/header.php';
                             <th>Item Name</th>
                             <th>Category</th>
                             <th>Available</th>
-                            <th>Total</th>
                             <th>Rental Price</th>
                             <th>Condition</th>
                             <?php if ($role === 'Super Admin'): ?>
@@ -233,7 +221,6 @@ require_once 'includes/header.php';
                                     <?php echo $item['available_quantity']; ?>
                                 </span>
                             </td>
-                            <td><?php echo $item['total_quantity']; ?></td>
                             <td><?php echo formatCurrency($item['rental_price']); ?></td>
                             <td><?php echo $item['condition_status']; ?></td>
                             <?php if ($role === 'Super Admin'): ?>
@@ -319,21 +306,6 @@ require_once 'includes/header.php';
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Rental Price *</label>
                             <input type="number" class="form-control" name="rental_price" required min="0" step="0.01">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Purchase Date</label>
-                            <input type="date" class="form-control" name="purchase_date">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Purchase Price</label>
-                            <input type="number" class="form-control" name="purchase_price" min="0" step="0.01">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Supplier</label>
-                            <input type="text" class="form-control" name="supplier">
                         </div>
                     </div>
                     
@@ -427,21 +399,6 @@ require_once 'includes/header.php';
                     </div>
                     
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Purchase Date</label>
-                            <input type="date" class="form-control" name="purchase_date" value="<?php echo $item['purchase_date']; ?>">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Purchase Price</label>
-                            <input type="number" class="form-control" name="purchase_price" value="<?php echo $item['purchase_price']; ?>" min="0" step="0.01">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Supplier</label>
-                            <input type="text" class="form-control" name="supplier" value="<?php echo $item['supplier']; ?>">
-                        </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Status *</label>
                             <select class="form-select" name="status" required>

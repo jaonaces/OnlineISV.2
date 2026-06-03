@@ -39,8 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'branch_id' => $package_branch_id,
                 'status' => 'Active'
             ]);
-            
-            logAudit('Created', 'Package', $package_id, "Created package: $package_name");
+
             setFlashMessage('success', 'Package added successfully.');
         } elseif ($action === 'edit') {
             $package_id = intval($_POST['package_id']);
@@ -57,8 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'base_price' => $base_price,
                 'status' => $status
             ], 'package_id = ?', [$package_id]);
-            
-            logAudit('Updated', 'Package', $package_id, "Updated package: $package_name");
+
             setFlashMessage('success', 'Package updated successfully.');
         } elseif ($action === 'delete') {
             $package_id = intval($_POST['package_id']);
@@ -70,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $package = $db->fetchOne("SELECT package_name FROM packages WHERE package_id = ?", [$package_id]);
                 $db->delete('packages', 'package_id = ?', [$package_id]);
-                logAudit('Deleted', 'Package', $package_id, "Deleted package: " . $package['package_name']);
                 setFlashMessage('success', 'Package deleted successfully.');
             }
         }
@@ -110,9 +107,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Package Management</h1>
-            <p>Manage event packages</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Package Management</h1>
+                <p>Manage event packages</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPackageModal">
             <i class="bi bi-plus-lg me-2"></i>Add Package

@@ -119,9 +119,14 @@ if ($role === 'Super Admin') {
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Dashboard</h1>
-            <p>Welcome back, <?php echo $_SESSION['full_name']; ?>!</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Dashboard</h1>
+                <p>Welcome back, <?php echo $_SESSION['full_name']; ?>!</p>
+            </div>
         </div>
         <div class="d-flex gap-2">
             <?php if ($role === 'Super Admin'): ?>

@@ -45,7 +45,7 @@ function verifyPassword($password, $hash) {
 
 // Format Currency
 function formatCurrency($amount) {
-    return CURRENCY_SYMBOL . number_format($amount, 2);
+    return CURRENCY_SYMBOL . number_format($amount ?? 0, 2);
 }
 
 // Format Date
@@ -74,6 +74,13 @@ function getCurrentDateTime() {
 function redirect($url) {
     header("Location: $url");
     exit();
+}
+
+// Get Company Name from Settings
+function getCompanyName() {
+    $db = Database::getInstance();
+    $result = $db->fetchOne("SELECT setting_value FROM system_settings WHERE setting_key = 'company_name'");
+    return $result['setting_value'] ?? 'Event Planner Pro';
 }
 
 // Set Flash Message
@@ -204,25 +211,6 @@ function generateTransferCode() {
     
     $nextNum = ($result['max_num'] ?? 0) + 1;
     return 'TR' . $prefix . '-' . str_pad($nextNum, 6, '0', STR_PAD_LEFT);
-}
-
-// Log Audit Trail
-function logAudit($action, $module, $recordId = null, $description = '') {
-    $db = Database::getInstance();
-    
-    $data = [
-        'user_id' => getCurrentUserId(),
-        'username' => $_SESSION['username'] ?? '',
-        'branch_id' => getCurrentUserBranchId(),
-        'action' => $action,
-        'module' => $module,
-        'record_id' => $recordId,
-        'description' => $description,
-        'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
-        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? ''
-    ];
-    
-    $db->insert('audit_logs', $data);
 }
 
 // Upload File

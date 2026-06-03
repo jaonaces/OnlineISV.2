@@ -29,19 +29,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($action === 'update_settings') {
             $company_name = sanitize($_POST['company_name']);
-            $tax_rate = floatval($_POST['tax_rate']);
+            $tax_rate = floatval($_POST['tax_rate'] ?? 0);
             $currency = sanitize($_POST['currency']);
             $date_format = sanitize($_POST['date_format']);
             $time_format = sanitize($_POST['time_format']);
-            
+
             // Update settings
             $db->update('system_settings', ['setting_value' => $company_name], "setting_key = 'company_name'");
             $db->update('system_settings', ['setting_value' => $tax_rate], "setting_key = 'tax_rate'");
             $db->update('system_settings', ['setting_value' => $currency], "setting_key = 'currency'");
             $db->update('system_settings', ['setting_value' => $date_format], "setting_key = 'date_format'");
             $db->update('system_settings', ['setting_value' => $time_format], "setting_key = 'time_format'");
-            
-            logAudit('Updated', 'Settings', null, 'Updated system settings');
+
             setFlashMessage('success', 'Settings updated successfully.');
         }
         
@@ -62,9 +61,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>System Settings</h1>
-            <p>Configure system-wide settings</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>System Settings</h1>
+                <p>Configure system-wide settings</p>
+            </div>
         </div>
     </div>
 
@@ -91,11 +95,6 @@ require_once 'includes/header.php';
                         <div class="mb-3">
                             <label class="form-label">Company Name *</label>
                             <input type="text" class="form-control" name="company_name" value="<?php echo $settings['company_name'] ?? APP_NAME; ?>" required>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Tax Rate (%) *</label>
-                            <input type="number" class="form-control" name="tax_rate" value="<?php echo $settings['tax_rate'] ?? 12; ?>" required min="0" max="100" step="0.01">
                         </div>
                         
                         <div class="mb-3">

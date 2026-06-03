@@ -35,10 +35,11 @@ switch ($report_type) {
         $report_title = 'Booking Report';
         $whereClause = $branchFilter ? ' AND b.branch_id = ?' : '';
         $report_data = $db->fetchAll(
-            "SELECT b.*, c.full_name as client_name, p.package_name 
-             FROM bookings b 
-             JOIN clients c ON b.client_id = c.client_id 
-             LEFT JOIN packages p ON b.package_id = p.package_id 
+            "SELECT b.*, c.full_name as client_name, p.package_name, br.branch_name
+             FROM bookings b
+             JOIN clients c ON b.client_id = c.client_id
+             LEFT JOIN packages p ON b.package_id = p.package_id
+             LEFT JOIN branches br ON b.branch_id = br.branch_id
              WHERE b.event_date BETWEEN ? AND ? $whereClause
              ORDER BY b.event_date ASC",
             array_merge([$start_date, $end_date], $params)
@@ -118,12 +119,18 @@ switch ($report_type) {
 $csrf_token = generateCSRFToken();
 require_once 'includes/header.php';
 ?>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Reports</h1>
-            <p>Generate and export reports</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Reports</h1>
+                <p>Generate and export reports</p>
+            </div>
         </div>
     </div>
 
@@ -161,13 +168,10 @@ require_once 'includes/header.php';
 
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span><?php echo $report_title; ?> (<?php echo formatDate($start_date); ?> to <?php echo formatDate($end_date); ?>)</span>
+            <span><?php echo getCompanyName(); ?> - <?php echo $report_title; ?> (<?php echo formatDate($start_date); ?> to <?php echo formatDate($end_date); ?>)</span>
             <div>
-                <button class="btn btn-sm btn-success" onclick="exportToExcel()">
-                    <i class="bi bi-file-earmark-excel me-1"></i> Excel
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="window.print()">
-                    <i class="bi bi-printer me-1"></i> Print
+                <button class="btn btn-sm btn-success" onclick="exportToPDF()">
+                    <i class="bi bi-file-earmark-pdf me-1"></i> Export PDF
                 </button>
             </div>
         </div>
@@ -190,6 +194,7 @@ require_once 'includes/header.php';
                             <th>Time</th>
                             <th>Location</th>
                             <th>Package</th>
+                            <th>Branch</th>
                             <th>Total Amount</th>
                             <th>Status</th>
                         </tr>
@@ -244,6 +249,7 @@ require_once 'includes/header.php';
                             <td><?php echo $row['event_time']; ?></td>
                             <td><?php echo substr($row['event_location'], 0, 30); ?></td>
                             <td><?php echo $row['package_name'] ?? 'N/A'; ?></td>
+                            <td><?php echo $row['branch_name'] ?? 'N/A'; ?></td>
                             <td><?php echo formatCurrency($row['total_amount']); ?></td>
                             <td><?php echo $row['status']; ?></td>
                         </tr>
@@ -299,11 +305,97 @@ require_once 'includes/header.php';
 <?php require_once 'includes/footer.php'; ?>
 
 <script>
-function exportToExcel() {
+function exportToPDF() {
+    // Check if html2pdf library is loaded
+    if (typeof html2pdf === 'undefined') {
+        alert('PDF library is loading. Please wait a moment and try again.');
+        return;
+    }
+    
     const table = document.getElementById('reportTable');
-    const wb = XLSX.utils.table_to_book(table, {sheet: "Report"});
-    XLSX.writeFile(wb, '<?php echo $report_title; ?>_<?php echo date('Y-m-d'); ?>.xlsx');
+    if (!table) {
+        alert('Report table not found.');
+        return;
+    }
+    
+    try {
+        // Create a styled HTML template for PDF
+        const element = document.createElement('div');
+        element.style.padding = '20px';
+        element.style.fontFamily = 'Arial, sans-serif';
+        
+        // Add header section
+        element.innerHTML = `
+            <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px;">
+                <h1 style="color: #333; margin: 0 0 10px 0; font-size: 24px;"><?php echo getCompanyName(); ?></h1>
+                <h2 style="color: #666; margin: 0 0 10px 0; font-size: 18px;"><?php echo $report_title; ?></h2>
+                <p style="color: #666; margin: 5px 0; font-size: 14px;">Date Range: <?php echo formatDate($start_date); ?> to <?php echo formatDate($end_date); ?></p>
+                <p style="color: #666; margin: 5px 0; font-size: 14px;">Generated: <?php echo formatDate(date('Y-m-d')); ?></p>
+            </div>
+        `;
+        
+        // Clone the table and add it to the element
+        const tableClone = table.cloneNode(true);
+        tableClone.style.width = '100%';
+        tableClone.style.borderCollapse = 'collapse';
+        tableClone.style.marginTop = '20px';
+        
+        // Style the table
+        const thead = tableClone.querySelector('thead');
+        if (thead) {
+            thead.style.backgroundColor = '#333';
+            thead.style.color = '#fff';
+        }
+        
+        const thElements = tableClone.querySelectorAll('th');
+        thElements.forEach(th => {
+            th.style.padding = '12px';
+            th.style.textAlign = 'left';
+            th.style.border = '1px solid #ddd';
+            th.style.backgroundColor = '#333';
+            th.style.color = '#fff';
+            th.style.fontSize = '12px';
+        });
+        
+        const tdElements = tableClone.querySelectorAll('td');
+        tdElements.forEach(td => {
+            td.style.padding = '10px';
+            td.style.border = '1px solid #ddd';
+            td.style.fontSize = '11px';
+        });
+        
+        const trElements = tableClone.querySelectorAll('tbody tr');
+        trElements.forEach((tr, index) => {
+            tr.style.backgroundColor = index % 2 === 0 ? '#f9f9f9' : '#fff';
+        });
+        
+        element.appendChild(tableClone);
+        
+        // Add footer
+        const footer = document.createElement('div');
+        footer.style.marginTop = '30px';
+        footer.style.paddingTop = '20px';
+        footer.style.borderTop = '1px solid #ddd';
+        footer.style.textAlign = 'center';
+        footer.style.color = '#666';
+        footer.style.fontSize = '10px';
+        footer.innerHTML = `<p>This report was generated automatically by <?php echo getCompanyName(); ?></p>`;
+        element.appendChild(footer);
+        
+        // PDF configuration
+        const opt = {
+            margin: [10, 10, 10, 10],
+            filename: '<?php echo $report_title; ?>_<?php echo date('Y-m-d'); ?>.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+        
+        // Generate and download PDF
+        html2pdf().set(opt).from(element).save();
+    } catch (error) {
+        alert('Error exporting to PDF: ' + error.message);
+        console.error('Export error:', error);
+    }
 }
 </script>
-
-<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>

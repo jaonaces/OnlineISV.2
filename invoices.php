@@ -33,11 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $invoice_date = $_POST['invoice_date'];
                 $due_date = $_POST['due_date'];
                 $subtotal = $booking['total_amount'];
-                $tax = $subtotal * TAX_RATE;
+                $tax = 0;
                 $discount = floatval($_POST['discount']) ?: 0;
-                $total_amount = $subtotal + $tax - $discount;
+                $total_amount = $subtotal - $discount;
                 $notes = sanitize($_POST['notes']);
-                
+
                 $invoice_id = $db->insert('invoices', [
                     'invoice_number' => $invoice_number,
                     'booking_id' => $booking_id,
@@ -53,8 +53,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'notes' => $notes,
                     'created_by' => getCurrentUserId()
                 ]);
-                
-                logAudit('Created', 'Invoice', $invoice_id, "Created invoice: $invoice_number");
+
+                // If downpayment was made on the booking, create a payment record for it
+                if ($booking['down_payment'] > 0) {
+                    $payment_code = 'PAY' . date('ym') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+                    $db->insert('payments', [
+                        'payment_code' => $payment_code,
+                        'invoice_id' => $invoice_id,
+                        'booking_id' => $booking_id,
+                        'client_id' => $booking['client_id'],
+                        'branch_id' => $booking['branch_id'],
+                        'payment_date' => $invoice_date,
+                        'payment_method' => 'Cash',
+                        'amount' => $booking['down_payment'],
+                        'reference_number' => 'Downpayment',
+                        'notes' => 'Downpayment from booking',
+                        'received_by' => $booking['created_by']
+                    ]);
+
+                    // Update invoice status based on downpayment
+                    if ($booking['down_payment'] >= $total_amount) {
+                        $db->update('invoices', ['status' => 'Paid'], 'invoice_id = ?', [$invoice_id]);
+                    } else {
+                        $db->update('invoices', ['status' => 'Partial'], 'invoice_id = ?', [$invoice_id]);
+                    }
+                }
+
                 setFlashMessage('success', 'Invoice created successfully.');
             }
         } elseif ($action === 'update_status') {
@@ -62,7 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $status = $_POST['status'];
             
             $db->update('invoices', ['status' => $status], 'invoice_id = ?', [$invoice_id]);
-            logAudit('Updated', 'Invoice', $invoice_id, "Updated invoice status to: $status");
             setFlashMessage('success', 'Invoice status updated successfully.');
         } elseif ($action === 'delete') {
             $invoice_id = intval($_POST['invoice_id']);
@@ -74,7 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $invoice = $db->fetchOne("SELECT invoice_number FROM invoices WHERE invoice_id = ?", [$invoice_id]);
                 $db->delete('invoices', 'invoice_id = ?', [$invoice_id]);
-                logAudit('Deleted', 'Invoice', $invoice_id, "Deleted invoice: " . $invoice['invoice_number']);
                 setFlashMessage('success', 'Invoice deleted successfully.');
             }
         }
@@ -101,7 +123,7 @@ $invoices = $db->fetchAll(
      JOIN clients c ON i.client_id = c.client_id
      LEFT JOIN branches br ON i.branch_id = br.branch_id
      $whereClause
-     ORDER BY i.invoice_date DESC, i.invoice_number DESC",
+     ORDER BY i.created_at DESC",
     $params
 );
 
@@ -123,9 +145,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Invoice Management</h1>
-            <p>Manage client invoices</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Invoice Management</h1>
+                <p>Manage client invoices</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createInvoiceModal">
             <i class="bi bi-plus-lg me-2"></i>Create Invoice
@@ -149,13 +176,13 @@ require_once 'includes/header.php';
                             <th>Invoice #</th>
                             <th>Booking #</th>
                             <th>Client</th>
+                            <th>Branch</th>
                             <th>Invoice Date</th>
                             <th>Due Date</th>
                             <th>Total</th>
                             <th>Paid</th>
                             <th>Balance</th>
                             <th>Status</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -164,6 +191,7 @@ require_once 'includes/header.php';
                             <td><strong><?php echo $invoice['invoice_number']; ?></strong></td>
                             <td><?php echo $invoice['booking_number']; ?></td>
                             <td><?php echo $invoice['client_name']; ?></td>
+                            <td><?php echo $invoice['branch_name'] ?? 'N/A'; ?></td>
                             <td><?php echo formatDate($invoice['invoice_date']); ?></td>
                             <td><?php echo $invoice['due_date'] ? formatDate($invoice['due_date']) : 'N/A'; ?></td>
                             <td><?php echo formatCurrency($invoice['total_amount']); ?></td>
@@ -177,14 +205,6 @@ require_once 'includes/header.php';
                                 ?>">
                                     <?php echo $invoice['status']; ?>
                                 </span>
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" onclick="viewInvoice(<?php echo $invoice['invoice_id']; ?>)">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                <button class="btn btn-sm btn-danger btn-delete" onclick="deleteInvoice(<?php echo $invoice['invoice_id']; ?>, '<?php echo $invoice['invoice_number']; ?>')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
                             </td>
                         </tr>
                         <?php endforeach; ?>

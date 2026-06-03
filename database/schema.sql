@@ -15,7 +15,6 @@ DROP TABLE IF EXISTS event_assignments;
 DROP TABLE IF EXISTS booking_items;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS invoices;
-DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS staff;
 DROP TABLE IF EXISTS bookings;
 DROP TABLE IF EXISTS inventory_transfers;
@@ -325,6 +324,7 @@ CREATE TABLE invoices (
     INDEX idx_invoice_date (invoice_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
 -- ============================================
 -- PAYMENTS TABLE
 -- ============================================
@@ -347,28 +347,6 @@ CREATE TABLE payments (
     INDEX idx_booking_id (booking_id),
     INDEX idx_branch_id (branch_id),
     INDEX idx_payment_date (payment_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ============================================
--- AUDIT LOGS TABLE
--- ============================================
-CREATE TABLE audit_logs (
-    log_id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    username VARCHAR(50) NOT NULL,
-    branch_id INT,
-    action VARCHAR(50) NOT NULL,
-    module VARCHAR(50) NOT NULL,
-    record_id INT,
-    description TEXT,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_user_id (user_id),
-    INDEX idx_branch_id (branch_id),
-    INDEX idx_action (action),
-    INDEX idx_module (module),
-    INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -400,7 +378,6 @@ INSERT INTO users (username, password, full_name, email, phone, role, branch_id,
 -- Insert Default System Settings
 INSERT INTO system_settings (setting_key, setting_value, description) VALUES
 ('company_name', 'Event Planner Pro', 'Company Name'),
-('tax_rate', '12', 'Tax Rate in Percentage'),
 ('currency', 'PHP', 'Currency Code'),
 ('date_format', 'Y-m-d', 'Date Format'),
 ('time_format', 'H:i', 'Time Format');
@@ -508,32 +485,3 @@ ALTER TABLE payments ADD FOREIGN KEY (booking_id) REFERENCES bookings(booking_id
 ALTER TABLE payments ADD FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE;
 ALTER TABLE payments ADD FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE CASCADE;
 ALTER TABLE payments ADD FOREIGN KEY (received_by) REFERENCES users(user_id) ON DELETE SET NULL;
-ALTER TABLE audit_logs ADD FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE;
-ALTER TABLE audit_logs ADD FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL;
-
--- ============================================
--- CREATE TRIGGERS FOR AUDIT LOGGING
--- ============================================
-
-DELIMITER //
-
--- Trigger for Bookings
-CREATE TRIGGER after_booking_insert
-AFTER INSERT ON bookings
-FOR EACH ROW
-BEGIN
-    INSERT INTO audit_logs (user_id, username, branch_id, action, module, record_id, description)
-    VALUES (NEW.created_by, (SELECT username FROM users WHERE user_id = NEW.created_by), NEW.branch_id, 'Created', 'Booking', NEW.booking_id, 
-            CONCAT('Created booking ', NEW.booking_number, ' for client ', NEW.client_id));
-END //
-
-CREATE TRIGGER after_booking_update
-AFTER UPDATE ON bookings
-FOR EACH ROW
-BEGIN
-    INSERT INTO audit_logs (user_id, username, branch_id, action, module, record_id, description)
-    VALUES (NEW.updated_by, (SELECT username FROM users WHERE user_id = NEW.updated_by), NEW.branch_id, 'Updated', 'Booking', NEW.booking_id,
-            CONCAT('Updated booking ', NEW.booking_number, ' status to ', NEW.status));
-END //
-
-DELIMITER ;

@@ -54,7 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'notes' => $notes
                     ]);
                     
-                    logAudit('Created', 'Transfer', $transfer_id, "Created transfer: $transfer_code");
                     setFlashMessage('success', 'Transfer request created successfully.');
                 }
             }
@@ -199,7 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 $db->update('inventory_transfers', ['status' => 'Cancelled'], 'transfer_id = ?', [$transfer_id]);
-                logAudit('Cancelled', 'Transfer', $transfer_id, "Cancelled transfer: " . $transfer['transfer_code']);
                 setFlashMessage('success', 'Transfer cancelled successfully.');
             }
         }
@@ -244,9 +242,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Inventory Transfers</h1>
-            <p>Manage inventory transfers between branches</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Inventory Transfers</h1>
+                <p>Manage inventory transfers between branches</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTransferModal">
             <i class="bi bi-plus-lg me-2"></i>New Transfer

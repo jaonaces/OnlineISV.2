@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'venue_name' => $venue_name,
                 'package_id' => $package_id,
                 'estimated_guests' => $estimated_guests,
-                'status' => 'Inquiry',
+                'status' => 'Pending',
                 'total_amount' => $total_amount,
                 'down_payment' => $down_payment,
                 'balance' => $total_amount - $down_payment,
@@ -59,8 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'notes' => $notes,
                 'created_by' => getCurrentUserId()
             ]);
-            
-            logAudit('Created', 'Booking', $booking_id, "Created booking: $booking_number");
+
             setFlashMessage('success', 'Booking added successfully.');
         } elseif ($action === 'edit') {
             $booking_id = intval($_POST['booking_id']);
@@ -95,15 +94,138 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => $status,
                 'updated_by' => getCurrentUserId()
             ], 'booking_id = ?', [$booking_id]);
-            
-            logAudit('Updated', 'Booking', $booking_id, "Updated booking status to: $status");
+
             setFlashMessage('success', 'Booking updated successfully.');
         } elseif ($action === 'delete') {
             $booking_id = intval($_POST['booking_id']);
             $booking = $db->fetchOne("SELECT booking_number FROM bookings WHERE booking_id = ?", [$booking_id]);
             $db->delete('bookings', 'booking_id = ?', [$booking_id]);
-            logAudit('Deleted', 'Booking', $booking_id, "Deleted booking: " . $booking['booking_number']);
             setFlashMessage('success', 'Booking deleted successfully.');
+        } elseif ($action === 'rent') {
+            $inventory_id = intval($_POST['inventory_id']);
+            $client_id = intval($_POST['client_id']);
+            $rental_date = $_POST['rental_date'];
+            $return_date = $_POST['return_date'];
+            $quantity = intval($_POST['quantity']);
+            
+            // Get inventory item
+            $inventory = $db->fetchOne("SELECT * FROM inventory WHERE inventory_id = ?", [$inventory_id]);
+            
+            if (!$inventory) {
+                setFlashMessage('error', 'Inventory item not found.');
+            } elseif ($inventory['available_quantity'] < $quantity) {
+                setFlashMessage('error', 'Insufficient inventory available.');
+            } else {
+                // Calculate total amount
+                $rental_date_obj = new DateTime($rental_date);
+                $return_date_obj = new DateTime($return_date);
+                $days = $rental_date_obj->diff($return_date_obj)->days;
+                $total_amount = $inventory['rental_price'] * $quantity * $days;
+                
+                // Create booking
+                $booking_number = generateBookingNumber();
+                $booking_id = $db->insert('bookings', [
+                    'booking_number' => $booking_number,
+                    'client_id' => $client_id,
+                    'branch_id' => $inventory['branch_id'],
+                    'event_type' => 'Rental',
+                    'event_date' => $rental_date,
+                    'event_time' => '00:00:00',
+                    'end_time' => '23:59:59',
+                    'event_location' => 'Rental',
+                    'total_amount' => $total_amount,
+                    'status' => 'Confirmed',
+                    'created_by' => getCurrentUserId()
+                ]);
+                
+                // Add booking item
+                $db->insert('booking_items', [
+                    'booking_id' => $booking_id,
+                    'inventory_id' => $inventory_id,
+                    'quantity' => $quantity,
+                    'rental_price' => $inventory['rental_price'],
+                    'subtotal' => $total_amount,
+                    'status' => 'Reserved'
+                ]);
+                
+                // Update inventory quantity
+                $new_available = $inventory['available_quantity'] - $quantity;
+                $db->update('inventory', ['available_quantity' => $new_available], 'inventory_id = ?', [$inventory_id]);
+                
+                // Log transaction
+                $transaction_code = 'TXN' . date('ym') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+                $db->insert('inventory_transactions', [
+                    'transaction_code' => $transaction_code,
+                    'inventory_id' => $inventory_id,
+                    'transaction_type' => 'Rent Out',
+                    'quantity' => -$quantity,
+                    'previous_quantity' => $inventory['available_quantity'],
+                    'new_quantity' => $new_available,
+                    'notes' => "Rented to client ID: $client_id",
+                    'performed_by' => getCurrentUserId(),
+                    'branch_id' => $inventory['branch_id']
+                ]);
+                
+                setFlashMessage('success', 'Item rented successfully. Booking number: ' . $booking_number);
+            }
+        } elseif ($action === 'return_item') {
+            $booking_id = intval($_POST['booking_id']);
+            
+            // Get booking details
+            $booking = $db->fetchOne("SELECT * FROM bookings WHERE booking_id = ?", [$booking_id]);
+            
+            if (!$booking) {
+                setFlashMessage('error', 'Booking not found.');
+            } elseif ($booking['event_type'] !== 'Rental') {
+                setFlashMessage('error', 'This is not a rental booking.');
+            } else {
+                // Get all booking items for this booking
+                $booking_items = $db->fetchAll(
+                    "SELECT bi.*, i.item_name 
+                     FROM booking_items bi 
+                     JOIN inventory i ON bi.inventory_id = i.inventory_id 
+                     WHERE bi.booking_id = ? AND bi.status != 'Returned'",
+                    [$booking_id]
+                );
+                
+                if (empty($booking_items)) {
+                    setFlashMessage('error', 'No items to return for this booking.');
+                } else {
+                    $returned_count = 0;
+                    
+                    foreach ($booking_items as $booking_item) {
+                        // Get inventory item
+                        $inventory = $db->fetchOne("SELECT * FROM inventory WHERE inventory_id = ?", [$booking_item['inventory_id']]);
+                        
+                        if ($inventory) {
+                            // Update booking item status to Returned
+                            $db->update('booking_items', ['status' => 'Returned'], 'booking_item_id = ?', [$booking_item['booking_item_id']]);
+                            
+                            // Restore inventory quantity
+                            $new_available = $inventory['available_quantity'] + $booking_item['quantity'];
+                            $db->update('inventory', ['available_quantity' => $new_available], 'inventory_id = ?', [$booking_item['inventory_id']]);
+                            
+                            // Log transaction
+                            $transaction_code = 'TXN' . date('ym') . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+                            $db->insert('inventory_transactions', [
+                                'transaction_code' => $transaction_code,
+                                'inventory_id' => $booking_item['inventory_id'],
+                                'transaction_type' => 'Return',
+                                'quantity' => $booking_item['quantity'],
+                                'previous_quantity' => $inventory['available_quantity'],
+                                'new_quantity' => $new_available,
+                                'notes' => "Returned from booking: " . $booking['booking_number'],
+                                'performed_by' => getCurrentUserId(),
+                                'branch_id' => $inventory['branch_id']
+                            ]);
+                            
+                            $returned_count++;
+                        }
+                    }
+                    
+                    setFlashMessage('success', "Successfully returned $returned_count item(s). Inventory quantities restored.");
+                }
+            }
         }
         
         redirect('bookings.php');
@@ -121,13 +243,20 @@ if ($role !== 'Super Admin') {
 
 // Get bookings
 $bookings = $db->fetchAll(
-    "SELECT b.*, c.full_name as client_name, p.package_name, br.branch_name 
-     FROM bookings b 
-     JOIN clients c ON b.client_id = c.client_id 
-     LEFT JOIN packages p ON b.package_id = p.package_id 
-     LEFT JOIN branches br ON b.branch_id = br.branch_id 
-     $whereClause 
-     ORDER BY b.event_date DESC, b.event_time DESC",
+    "SELECT b.*, c.full_name as client_name, p.package_name, br.branch_name,
+            (SELECT GROUP_CONCAT(CONCAT(i.item_name, ' (', bi.quantity, ')') SEPARATOR ', ')
+             FROM booking_items bi
+             JOIN inventory i ON bi.inventory_id = i.inventory_id
+             WHERE bi.booking_id = b.booking_id) as items,
+            (SELECT GROUP_CONCAT(bi.status SEPARATOR ', ')
+             FROM booking_items bi
+             WHERE bi.booking_id = b.booking_id) as item_statuses
+     FROM bookings b
+     JOIN clients c ON b.client_id = c.client_id
+     LEFT JOIN packages p ON b.package_id = p.package_id
+     LEFT JOIN branches br ON b.branch_id = br.branch_id
+     $whereClause
+     ORDER BY b.created_at DESC",
     $params
 );
 
@@ -153,19 +282,45 @@ if ($role === 'Super Admin') {
     $branches = $db->fetchAll("SELECT branch_id, branch_name FROM branches WHERE status = 'Active' ORDER BY branch_name ASC");
 }
 
+// Get available inventory for rent item modal
+$whereClause = 'WHERE available_quantity > 0 AND status = \'Active\'';
+$params = [];
+
+if ($role !== 'Super Admin') {
+    $whereClause = 'WHERE branch_id = ? AND available_quantity > 0 AND status = \'Active\'';
+    $params[] = $branchId;
+}
+
+$inventory = $db->fetchAll(
+    "SELECT * FROM inventory
+     $whereClause
+     ORDER BY category ASC, item_name ASC",
+    $params
+);
+
 $csrf_token = generateCSRFToken();
 require_once 'includes/header.php';
 ?>
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>Booking Management</h1>
-            <p>Manage event bookings</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>Booking Management</h1>
+                <p>Manage event bookings</p>
+            </div>
         </div>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBookingModal">
-            <i class="bi bi-plus-lg me-2"></i>New Booking
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBookingModal">
+                <i class="bi bi-plus-lg me-2"></i>New Booking
+            </button>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#rentItemModal">
+                <i class="bi bi-cart me-2"></i>Rent Item
+            </button>
+        </div>
     </div>
 
     <?php $flash = getFlashMessage(); ?>
@@ -185,10 +340,12 @@ require_once 'includes/header.php';
                             <th>Booking #</th>
                             <th>Client</th>
                             <th>Event Type</th>
+                            <th>Items</th>
                             <th>Event Date</th>
                             <th>Time</th>
                             <th>Location</th>
                             <th>Package</th>
+                            <th>Branch</th>
                             <th>Total</th>
                             <th>Status</th>
                             <th>Actions</th>
@@ -200,17 +357,19 @@ require_once 'includes/header.php';
                             <td><strong><?php echo $booking['booking_number']; ?></strong></td>
                             <td><?php echo $booking['client_name']; ?></td>
                             <td><?php echo $booking['event_type']; ?></td>
+                            <td><?php echo $booking['items'] ?? 'N/A'; ?></td>
                             <td><?php echo formatDate($booking['event_date']); ?></td>
                             <td><?php echo $booking['event_time']; ?></td>
                             <td><?php echo $booking['venue_name'] ?? $booking['event_location']; ?></td>
                             <td><?php echo $booking['package_name'] ?? 'N/A'; ?></td>
+                            <td><?php echo $booking['branch_name'] ?? 'N/A'; ?></td>
                             <td><?php echo formatCurrency($booking['total_amount']); ?></td>
                             <td>
-                                <span class="badge badge-<?php 
-                                    echo $booking['status'] === 'Confirmed' ? 'success' : 
-                                        ($booking['status'] === 'Pending' ? 'warning' : 
-                                        ($booking['status'] === 'Cancelled' ? 'danger' : 
-                                        ($booking['status'] === 'Completed' ? 'info' : 'primary'))); 
+                                <span class="badge badge-<?php
+                                    echo $booking['status'] === 'Confirmed' ? 'success' :
+                                        ($booking['status'] === 'Pending' ? 'warning' :
+                                        ($booking['status'] === 'Cancelled' ? 'danger' :
+                                        ($booking['status'] === 'Completed' ? 'info' : 'primary')));
                                 ?>">
                                     <?php echo $booking['status']; ?>
                                 </span>
@@ -219,6 +378,11 @@ require_once 'includes/header.php';
                                 <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editBookingModal<?php echo $booking['booking_id']; ?>">
                                     <i class="bi bi-pencil"></i>
                                 </button>
+                                <?php if ($booking['event_type'] === 'Rental' && $booking['item_statuses'] && strpos($booking['item_statuses'], 'Returned') === false): ?>
+                                <button class="btn btn-sm btn-success" onclick="returnItem(<?php echo $booking['booking_id']; ?>, '<?php echo $booking['booking_number']; ?>')">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                                <?php endif; ?>
                                 <button class="btn btn-sm btn-danger btn-delete" onclick="deleteBooking(<?php echo $booking['booking_id']; ?>, '<?php echo $booking['booking_number']; ?>')">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -428,7 +592,6 @@ require_once 'includes/header.php';
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Status *</label>
                             <select class="form-select" name="status" required>
-                                <option value="Inquiry" <?php echo $booking['status'] === 'Inquiry' ? 'selected' : ''; ?>>Inquiry</option>
                                 <option value="Pending" <?php echo $booking['status'] === 'Pending' ? 'selected' : ''; ?>>Pending</option>
                                 <option value="Confirmed" <?php echo $booking['status'] === 'Confirmed' ? 'selected' : ''; ?>>Confirmed</option>
                                 <option value="Ongoing" <?php echo $booking['status'] === 'Ongoing' ? 'selected' : ''; ?>>Ongoing</option>
@@ -482,6 +645,98 @@ require_once 'includes/header.php';
     </div>
 </div>
 
+<!-- Return Item Confirmation Modal -->
+<div class="modal fade" id="returnItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Return</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to return items for booking <strong id="returnBookingNumber"></strong>?</p>
+                <p>This will restore the inventory quantities.</p>
+                <form method="POST" id="returnItemForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                    <input type="hidden" name="action" value="return_item">
+                    <input type="hidden" name="booking_id" id="returnBookingId">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="returnItemForm" class="btn btn-success">Return Items</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rent Item Modal -->
+<div class="modal fade" id="rentItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rent Inventory Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                    <input type="hidden" name="action" value="rent">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Item *</label>
+                        <select class="form-select" name="inventory_id" required>
+                            <option value="">-- Select Item --</option>
+                            <?php foreach ($inventory as $item): ?>
+                            <option value="<?php echo $item['inventory_id']; ?>" data-price="<?php echo $item['rental_price']; ?>">
+                                <?php echo $item['item_name']; ?> (Available: <?php echo $item['available_quantity']; ?>, Price: <?php echo formatCurrency($item['rental_price']); ?>/day)
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Client *</label>
+                        <select class="form-select" name="client_id" required>
+                            <option value="">-- Select Client --</option>
+                            <?php foreach ($clients as $client): ?>
+                            <option value="<?php echo $client['client_id']; ?>"><?php echo $client['full_name']; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Rental Date *</label>
+                            <input type="date" class="form-control" name="rental_date" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Return Date *</label>
+                            <input type="date" class="form-control" name="return_date" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Quantity *</label>
+                        <input type="number" class="form-control" name="quantity" min="1" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Total Amount</label>
+                        <input type="text" class="form-control" id="rentalTotal" readonly>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-cart me-2"></i>Rent Item
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <?php require_once 'includes/sidebar.php'; ?>
 <?php require_once 'includes/footer.php'; ?>
 
@@ -500,4 +755,44 @@ function deleteBooking(bookingId, bookingNumber) {
     document.getElementById('deleteBookingNumber').textContent = bookingNumber;
     new bootstrap.Modal(document.getElementById('deleteBookingModal')).show();
 }
+
+function returnItem(bookingId, bookingNumber) {
+    document.getElementById('returnBookingId').value = bookingId;
+    document.getElementById('returnBookingNumber').textContent = bookingNumber;
+    new bootstrap.Modal(document.getElementById('returnItemModal')).show();
+}
+
+// Calculate rental total
+document.addEventListener('DOMContentLoaded', function() {
+    const itemSelect = document.querySelector('#rentItemModal select[name="inventory_id"]');
+    const quantityInput = document.querySelector('#rentItemModal input[name="quantity"]');
+    const rentalDateInput = document.querySelector('#rentItemModal input[name="rental_date"]');
+    const returnDateInput = document.querySelector('#rentItemModal input[name="return_date"]');
+    const totalInput = document.getElementById('rentalTotal');
+    
+    function calculateTotal() {
+        if (!itemSelect || !quantityInput || !rentalDateInput || !returnDateInput || !totalInput) return;
+        
+        const selectedOption = itemSelect.options[itemSelect.selectedIndex];
+        const price = parseFloat(selectedOption.getAttribute('data-price')) || 0;
+        const quantity = parseInt(quantityInput.value) || 0;
+        const rentalDate = new Date(rentalDateInput.value);
+        const returnDate = new Date(returnDateInput.value);
+        
+        if (rentalDate && returnDate && rentalDate < returnDate) {
+            const days = Math.ceil((returnDate - rentalDate) / (1000 * 60 * 60 * 24));
+            const total = price * quantity * days;
+            totalInput.value = formatCurrency(total);
+        } else {
+            totalInput.value = '';
+        }
+    }
+    
+    if (itemSelect) {
+        itemSelect.addEventListener('change', calculateTotal);
+        quantityInput.addEventListener('change', calculateTotal);
+        rentalDateInput.addEventListener('change', calculateTotal);
+        returnDateInput.addEventListener('change', calculateTotal);
+    }
+});
 </script>

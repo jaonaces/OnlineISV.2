@@ -56,8 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'branch_id' => $user_branch_id,
                         'status' => 'Active'
                     ]);
-                    
-                    logAudit('Created', 'User', $user_id, "Created user: $username");
+
                     setFlashMessage('success', 'User added successfully.');
                 }
             }
@@ -82,8 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'branch_id' => $user_branch_id,
                     'status' => $status
                 ], 'user_id = ?', [$user_id]);
-                
-                logAudit('Updated', 'User', $user_id, "Updated user: $full_name");
+
                 setFlashMessage('success', 'User updated successfully.');
             }
         } elseif ($action === 'reset_password') {
@@ -97,7 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'password' => hashPassword($new_password)
                 ], 'user_id = ?', [$user_id]);
                 
-                logAudit('Password Reset', 'User', $user_id, "Password reset for user ID: $user_id");
                 setFlashMessage('success', 'Password reset successfully.');
             }
         } elseif ($action === 'delete') {
@@ -109,7 +106,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $user = $db->fetchOne("SELECT full_name FROM users WHERE user_id = ?", [$user_id]);
                 $db->delete('users', 'user_id = ?', [$user_id]);
-                logAudit('Deleted', 'User', $user_id, "Deleted user: " . $user['full_name']);
                 setFlashMessage('success', 'User deleted successfully.');
             }
         }
@@ -140,9 +136,14 @@ require_once 'includes/header.php';
 
 <div class="main-content">
     <div class="top-bar">
-        <div class="page-title">
-            <h1>User Management</h1>
-            <p>Manage system users</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="mobile-menu-toggle" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="page-title">
+                <h1>User Management</h1>
+                <p>Manage system users</p>
+            </div>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
             <i class="bi bi-plus-lg me-2"></i>Add User
