@@ -375,17 +375,19 @@ require_once 'includes/header.php';
                                 </span>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editBookingModal<?php echo $booking['booking_id']; ?>">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <?php if ($booking['event_type'] === 'Rental' && $booking['item_statuses'] && strpos($booking['item_statuses'], 'Returned') === false): ?>
-                                <button class="btn btn-sm btn-success" onclick="returnItem(<?php echo $booking['booking_id']; ?>, '<?php echo $booking['booking_number']; ?>')">
-                                    <i class="bi bi-arrow-counterclockwise"></i>
-                                </button>
-                                <?php endif; ?>
-                                <button class="btn btn-sm btn-danger btn-delete" onclick="deleteBooking(<?php echo $booking['booking_id']; ?>, '<?php echo $booking['booking_number']; ?>')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editBookingModal<?php echo $booking['booking_id']; ?>">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <?php if ($booking['event_type'] === 'Rental' && $booking['item_statuses'] && strpos($booking['item_statuses'], 'Returned') === false): ?>
+                                    <button class="btn btn-sm btn-success" onclick="returnItem(<?php echo $booking['booking_id']; ?>, '<?php echo $booking['booking_number']; ?>')">
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                    </button>
+                                    <?php endif; ?>
+                                    <button class="btn btn-sm btn-danger btn-delete" onclick="deleteBooking(<?php echo $booking['booking_id']; ?>, '<?php echo $booking['booking_number']; ?>')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -499,11 +501,6 @@ require_once 'includes/header.php';
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label">Special Requests</label>
-                        <textarea class="form-control" name="special_requests" rows="2"></textarea>
-                    </div>
-                    
-                    <div class="mb-3">
                         <label class="form-label">Notes</label>
                         <textarea class="form-control" name="notes" rows="2"></textarea>
                     </div>
@@ -599,11 +596,6 @@ require_once 'includes/header.php';
                                 <option value="Cancelled" <?php echo $booking['status'] === 'Cancelled' ? 'selected' : ''; ?>>Cancelled</option>
                             </select>
                         </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Special Requests</label>
-                        <textarea class="form-control" name="special_requests" rows="2"><?php echo $booking['special_requests']; ?></textarea>
                     </div>
                     
                     <div class="mb-3">

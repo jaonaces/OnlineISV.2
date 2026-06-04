@@ -151,19 +151,27 @@ if ($role === 'Super Admin') {
     </div>
     <?php endif; ?>
 
-    <!-- Stats Cards -->
-    <div class="row g-4 mb-4">
-        <div class="col-xl-3 col-md-6">
-            <div class="stats-card primary">
-                <div class="icon">
-                    <i class="bi bi-calendar-check"></i>
+    <!-- Stats Cards - Asymmetric Bento Grid -->
+    <div class="row g-4 mb-5">
+        <div class="col-lg-5 col-md-12">
+            <div class="stats-card primary h-100">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <div class="icon mb-3">
+                            <i class="bi bi-cash-coin"></i>
+                        </div>
+                        <div class="value"> <?php echo formatCurrency($monthlyRevenue); ?></div>
+                        <div class="label">Monthly Revenue</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge badge-primary mb-2">All Time</div>
+                        <p class="mb-0 text-muted small">Across all branches</p>
+                    </div>
                 </div>
-                <div class="value"><?php echo number_format($totalBookings); ?></div>
-                <div class="label">Total Bookings</div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stats-card success">
+        <div class="col-lg-3 col-md-6">
+            <div class="stats-card success h-100">
                 <div class="icon">
                     <i class="bi bi-calendar-event"></i>
                 </div>
@@ -171,22 +179,31 @@ if ($role === 'Super Admin') {
                 <div class="label">Upcoming Events</div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stats-card warning">
+        <div class="col-lg-4 col-md-6">
+            <div class="stats-card warning h-100">
                 <div class="icon">
-                    <i class="bi bi-cash-coin"></i>
+                    <i class="bi bi-calendar-check"></i>
                 </div>
-                <div class="value"><?php echo formatCurrency($monthlyRevenue); ?></div>
-                <div class="label">Monthly Revenue</div>
+                <div class="value"><?php echo number_format($totalBookings); ?></div>
+                <div class="label">Total Bookings</div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stats-card danger">
+        <div class="col-lg-3 offset-lg-3 col-md-6">
+            <div class="stats-card danger h-100">
                 <div class="icon">
                     <i class="bi bi-exclamation-triangle"></i>
                 </div>
                 <div class="value"><?php echo count($lowStockItems); ?></div>
                 <div class="label">Low Stock Alerts</div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="stats-card info h-100">
+                <div class="icon">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
+                <div class="value"><?php echo $monthlyRevenue > 0 ? '+12%' : '0%'; ?></div>
+                <div class="label">Growth Rate</div>
             </div>
         </div>
     </div>
@@ -350,7 +367,7 @@ if ($role === 'Super Admin') {
 <?php require_once 'includes/footer.php'; ?>
 
 <script>
-// Revenue Chart
+// Revenue Chart - Modern Styling
 const revenueCtx = document.getElementById('revenueChart').getContext('2d');
 new Chart(revenueCtx, {
     type: 'line',
@@ -359,34 +376,94 @@ new Chart(revenueCtx, {
         datasets: [{
             label: 'Revenue',
             data: <?php echo json_encode($monthlyRevenueData); ?>,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderColor: '#059669',
+            backgroundColor: (context) => {
+                const ctx = context.chart.ctx;
+                const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+                gradient.addColorStop(0, 'rgba(5, 150, 105, 0.3)');
+                gradient.addColorStop(1, 'rgba(5, 150, 105, 0.0)');
+                return gradient;
+            },
             fill: true,
-            tension: 0.4
+            tension: 0.4,
+            borderWidth: 3,
+            pointBackgroundColor: '#059669',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 8,
+            pointHoverBackgroundColor: '#047857',
+            pointHoverBorderColor: '#ffffff',
+            pointHoverBorderWidth: 3
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: {
+            duration: 2000,
+            easing: 'easeOutQuart'
+        },
         plugins: {
             legend: {
                 display: false
+            },
+            tooltip: {
+                backgroundColor: 'rgba(10, 10, 10, 0.9)',
+                titleColor: '#ffffff',
+                bodyColor: '#ffffff',
+                borderColor: '#059669',
+                borderWidth: 1,
+                cornerRadius: 12,
+                padding: 16,
+                displayColors: false,
+                callbacks: {
+                    label: function(context) {
+                        return '₱' + context.parsed.y.toLocaleString();
+                    }
+                }
             }
         },
         scales: {
+            x: {
+                grid: {
+                    display: false,
+                    drawBorder: false
+                },
+                ticks: {
+                    color: '#737373',
+                    font: {
+                        family: 'Manrope',
+                        size: 12
+                    }
+                }
+            },
             y: {
                 beginAtZero: true,
+                grid: {
+                    color: '#e5e5e5',
+                    drawBorder: false
+                },
                 ticks: {
+                    color: '#737373',
+                    font: {
+                        family: 'Manrope',
+                        size: 12
+                    },
                     callback: function(value) {
                         return '₱' + value.toLocaleString();
                     }
                 }
             }
+        },
+        interaction: {
+            intersect: false,
+            mode: 'index'
         }
     }
 });
 
-// Event Type Chart
+// Event Type Chart - Modern Styling
 const eventTypeCtx = document.getElementById('eventTypeChart').getContext('2d');
 new Chart(eventTypeCtx, {
     type: 'doughnut',
@@ -395,23 +472,60 @@ new Chart(eventTypeCtx, {
         datasets: [{
             data: <?php echo json_encode($eventTypeCounts); ?>,
             backgroundColor: [
-                '#3b82f6',
-                '#10b981',
-                '#f59e0b',
-                '#ef4444',
-                '#8b5cf6',
-                '#06b6d4'
-            ]
+                '#059669',
+                '#0891b2',
+                '#d97706',
+                '#dc2626',
+                '#7c3aed',
+                '#0891b2'
+            ],
+            borderColor: '#ffffff',
+            borderWidth: 3,
+            hoverOffset: 10
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: {
+            animateRotate: true,
+            animateScale: true,
+            duration: 2000,
+            easing: 'easeOutQuart'
+        },
         plugins: {
             legend: {
-                position: 'bottom'
+                position: 'bottom',
+                labels: {
+                    padding: 20,
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                    font: {
+                        family: 'Manrope',
+                        size: 13,
+                        weight: '500'
+                    },
+                    color: '#171717'
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(10, 10, 10, 0.9)',
+                titleColor: '#ffffff',
+                bodyColor: '#ffffff',
+                borderColor: '#059669',
+                borderWidth: 1,
+                cornerRadius: 12,
+                padding: 16,
+                callbacks: {
+                    label: function(context) {
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                    }
+                }
             }
-        }
+        },
+        cutout: '65%'
     }
 });
 

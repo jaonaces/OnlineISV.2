@@ -66,29 +66,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 setFlashMessage('success', 'Payment recorded successfully.');
             }
         } elseif ($action === 'delete') {
-            $payment_id = intval($_POST['payment_id']);
-            $payment = $db->fetchOne("SELECT * FROM payments WHERE payment_id = ?", [$payment_id]);
-            
-            // Recalculate invoice status
-            $invoice_id = $payment['invoice_id'];
-            $db->delete('payments', 'payment_id = ?', [$payment_id]);
-            
-            $total_paid = $db->fetchOne(
-                "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE invoice_id = ?",
-                [$invoice_id]
-            )['total'];
-            
-            $invoice = $db->fetchOne("SELECT * FROM invoices WHERE invoice_id = ?", [$invoice_id]);
-            $new_status = 'Sent';
-            if ($total_paid > 0 && $total_paid < $invoice['total_amount']) {
-                $new_status = 'Partial';
-            } elseif ($total_paid >= $invoice['total_amount']) {
-                $new_status = 'Paid';
+            if ($role !== 'Super Admin') {
+                setFlashMessage('error', 'You do not have permission to delete payments.');
+            } else {
+                $payment_id = intval($_POST['payment_id']);
+                $payment = $db->fetchOne("SELECT * FROM payments WHERE payment_id = ?", [$payment_id]);
+                
+                // Recalculate invoice status
+                $invoice_id = $payment['invoice_id'];
+                $db->delete('payments', 'payment_id = ?', [$payment_id]);
+                
+                $total_paid = $db->fetchOne(
+                    "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE invoice_id = ?",
+                    [$invoice_id]
+                )['total'];
+                
+                $invoice = $db->fetchOne("SELECT * FROM invoices WHERE invoice_id = ?", [$invoice_id]);
+                $new_status = 'Sent';
+                if ($total_paid > 0 && $total_paid < $invoice['total_amount']) {
+                    $new_status = 'Partial';
+                } elseif ($total_paid >= $invoice['total_amount']) {
+                    $new_status = 'Paid';
+                }
+                
+                $db->update('invoices', ['status' => $new_status], 'invoice_id = ?', [$invoice_id]);
+                
+                setFlashMessage('success', 'Payment deleted successfully.');
             }
-            
-            $db->update('invoices', ['status' => $new_status], 'invoice_id = ?', [$invoice_id]);
-            
-            setFlashMessage('success', 'Payment deleted successfully.');
         }
         
         redirect('payments.php');
@@ -119,13 +123,13 @@ $payments = $db->fetchAll(
     "SELECT p.*, i.invoice_number, b.booking_number, c.full_name as client_name, br.branch_name,
             u.full_name as received_by_name, b.event_type
      FROM payments p
-     JOIN invoices i ON p.invoice_id = i.invoice_id
-     JOIN bookings b ON p.booking_id = b.booking_id
-     JOIN clients c ON p.client_id = c.client_id
+     INNER JOIN invoices i ON p.invoice_id = i.invoice_id
+     INNER JOIN bookings b ON p.booking_id = b.booking_id
+     INNER JOIN clients c ON p.client_id = c.client_id
      LEFT JOIN branches br ON p.branch_id = br.branch_id
      LEFT JOIN users u ON p.received_by = u.user_id
      $whereClause
-     ORDER BY p.created_at DESC",
+     ORDER BY p.payment_date DESC, p.created_at DESC",
     $params
 );
 
@@ -218,9 +222,11 @@ require_once 'includes/header.php';
                             <td><?php echo $payment['reference_number'] ?? 'N/A'; ?></td>
                             <td><?php echo $payment['received_by_name']; ?></td>
                             <td>
+                                <?php if ($role === 'Super Admin'): ?>
                                 <button class="btn btn-sm btn-danger btn-delete" onclick="deletePayment(<?php echo $payment['payment_id']; ?>, '<?php echo $payment['payment_code']; ?>')">
                                     <i class="bi bi-trash"></i>
                                 </button>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>
