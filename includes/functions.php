@@ -140,7 +140,7 @@ function isStaff() {
 function requireLogin() {
     if (!isLoggedIn()) {
         setFlashMessage('error', 'Please login to access this page.');
-        redirect('login.php');
+        redirect('index.php');
     }
 }
 

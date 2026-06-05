@@ -4,15 +4,15 @@
  * Configuration File
  */
 
-// Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'event_planner_db');
+// Database Configuration - Railway Environment Variables
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASSWORD') ?: '');
+define('DB_NAME', getenv('DB_NAME') ?: 'event_planner_db');
 
 // Application Configuration
 define('APP_NAME', 'Event Planner Pro');
-define('APP_URL', 'http://localhost/OnlineIsv.2');
+define('APP_URL', getenv('APP_URL') ?: 'http://localhost/OnlineIsv.2');
 define('APP_VERSION', '1.0.0');
 
 // Session Configuration
