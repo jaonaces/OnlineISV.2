@@ -4,11 +4,11 @@
  * Configuration File
  */
 
-// Database Configuration - Railway Environment Variables
-define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_USER', getenv('DB_USER') ?: 'root');
-define('DB_PASS', getenv('DB_PASSWORD') ?: '');
-define('DB_NAME', getenv('DB_NAME') ?: 'event_planner_db');
+// Database Configuration - Infinity Free
+define('DB_HOST', 'sql113.infinityfree.com');
+define('DB_USER', 'if0_42104189');
+define('DB_PASS', 'j4JZEZJUORbK');
+define('DB_NAME', 'if0_42104189_event_planner_db');
 
 // Application Configuration
 define('APP_NAME', 'Event Planner Pro');
@@ -44,8 +44,8 @@ define('CURRENCY_SYMBOL', '₱');
 define('TAX_RATE', 0.12);
 
 // Error Reporting (Disable in production)
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+error_reporting(0);
+ini_set('display_errors', 0);
 
 // Timezone
 date_default_timezone_set('Asia/Manila');
